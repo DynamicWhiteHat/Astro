@@ -10,13 +10,17 @@ from functools import partial
 import torch
 from ollama import generate
 from groq import Groq
-import warnings
 from TTS.api import TTS
 import sounddevice as sd
 import cv2
 import base64
 import keyboard
 from dotenv import load_dotenv
+from datetime import datetime
+import time
+import threading
+from googletrans import Translator
+
 
 # Suppress the specific warning
 #warnings.filterwarnings("ignore", category=UserWarning, message=".*torch.load.*")
@@ -29,15 +33,17 @@ cam = cv2.VideoCapture(0)
 
 #TTS setup
 device = "cuda" if torch.cuda.is_available() else "cpu"
-tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC_ph").to(device)
+tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
 #Groq set up:
 client = Groq(
-    api_key=os.environ.get("GROQ_API_KEY"),
+    api_key=os.getenv("GROQ"),
 )
 
+audio = "audio.wav"
+
 def sayAudio(text):
-    wav = tts.tts(text)
+    wav = tts.tts(text, speaker_wav=audio, language="en")
     sd.play(wav, samplerate=23500)
     sd.wait()
 
@@ -55,8 +61,101 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 #spacy model
 nlp = spacy.load("en_core_web_sm")
-nlp.Defaults.stop_words -= {"go", "to", "show", "sleep", "restart"}
 
+#languages
+language_map = {
+    'Afrikaans': 'af',
+    'Albanian': 'sq',
+    'Amharic': 'am',
+    'Arabic': 'ar',
+    'Armenian': 'hy',
+    'Basque': 'eu',
+    'Belarusian': 'be',
+    'Bengali': 'bn',
+    'Bosnian': 'bs',
+    'Bulgarian': 'bg',
+    'Catalan': 'ca',
+    'Cebuano': 'ceb',
+    'Chinese (Simplified)': 'zh-cn',
+    'Chinese (Traditional)': 'zh-tw',
+    'Croatian': 'hr',
+    'Czech': 'cs',
+    'Danish': 'da',
+    'Dutch': 'nl',
+    'English': 'en',
+    'Esperanto': 'eo',
+    'Estonian': 'et',
+    'Filipino': 'tl',
+    'Finnish': 'fi',
+    'French': 'fr',
+    'Galician': 'gl',
+    'Georgian': 'ka',
+    'German': 'de',
+    'Greek': 'el',
+    'Gujarati': 'gu',
+    'Haitian Creole': 'ht',
+    'Hebrew': 'he',
+    'Hindi': 'hi',
+    'Hmong': 'hmn',
+    'Hungarian': 'hu',
+    'Icelandic': 'is',
+    'Igbo': 'ig',
+    'Indonesian': 'id',
+    'Irish': 'ga',
+    'Italian': 'it',
+    'Japanese': 'ja',
+    'Javanese': 'jw',
+    'Kannada': 'kn',
+    'Kazakh': 'kk',
+    'Khmer': 'km',
+    'Korean': 'ko',
+    'Kurdish (Kurmanji)': 'ku',
+    'Kyrgyz': 'ky',
+    'Lao': 'lo',
+    'Latvian': 'lv',
+    'Lithuanian': 'lt',
+    'Macedonian': 'mk',
+    'Malay': 'ms',
+    'Malayalam': 'ml',
+    'Maltese': 'mt',
+    'Maori': 'mi',
+    'Marathi': 'mr',
+    'Mongolian': 'mn',
+    'Myanmar (Burmese)': 'my',
+    'Nepali': 'ne',
+    'Norwegian': 'no',
+    'Pashto': 'ps',
+    'Persian': 'fa',
+    'Polish': 'pl',
+    'Portuguese': 'pt',
+    'Punjabi': 'pa',
+    'Romanian': 'ro',
+    'Russian': 'ru',
+    'Serbian': 'sr',
+    'Sesotho': 'st',
+    'Sinhala': 'si',
+    'Slovak': 'sk',
+    'Slovenian': 'sl',
+    'Somali': 'so',
+    'Spanish': 'es',
+    'Sundanese': 'su',
+    'Swahili': 'sw',
+    'Swedish': 'sv',
+    'Tagalog': 'tl',
+    'Tamil': 'ta',
+    'Telugu': 'te',
+    'Thai': 'th',
+    'Turkish': 'tr',
+    'Ukrainian': 'uk',
+    'Urdu': 'ur',
+    'Uzbek': 'uz',
+    'Vietnamese': 'vi',
+    'Welsh': 'cy',
+    'Xhosa': 'xh',
+    'Yiddish': 'yi',
+    'Yoruba': 'yo',
+    'Zulu': 'zu'
+}
 
 def is_connected():
     try:
@@ -67,7 +166,6 @@ def is_connected():
         return False
 
 def recognize(type=2):
-    custom_vocabulary = ["styne"]
     #return input("response:")
     try:
         with sr.Microphone() as mic:
@@ -80,7 +178,7 @@ def recognize(type=2):
             if online:
                 text = r.recognize_google(audio)
                 while text == None:
-                    text = r.recognize_google(audio, additional_options={"hints": custom_vocabulary})
+                    text = r.recognize_google(audio)
                 return text
             else:
                 text = r.recognize_whisper(audio)
@@ -222,17 +320,52 @@ def off(action_type):
             os.system('shutdown -s -t 0')
         elif "no" in text:
             print("Shut down cancelled")
+            sayAudio("Shut down cancelled")
     elif action_type == 2:
         print("Are you sure you want to restart?")
         sayAudio("Are you sure you want to restart?")        
-
         text = recognize()
         if "yes" in text:
             os.system('shutdown -r -t 0')
         elif "no" in text:
             print("Restart cancelled")
+            sayAudio("Restart cancelled")
+
     elif action_type == 3:
         os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+
+def get_time():
+    current_time = datetime.now()
+    formatted_time = current_time.strftime("%H:%M")
+    print("Current Time:", formatted_time)
+    sayAudio("The time is " + str(formatted_time))
+
+def timer():
+    print("How many minutes would you like a timer for?")
+    sayAudio("How many minutes would you like a timer for?")
+    minutes = recognize()
+    seconds = minutes*60
+    timer = 0
+    while timer < seconds:
+        timer+=1
+        time.sleep(1)
+    print("Your timer is done")
+    sayAudio("Your timer is done")
+
+def start_timer(time_in_minutes):
+    timer_thread = threading.Thread(target=timer, args=(time_in_minutes,))
+    timer_thread.start()
+
+def change_voice():
+    global audio
+    if audio == "audio.wav":
+        audio = "audio2.wav" 
+        sayAudio("Voice changed to Andrew")
+
+    else:
+        audio = "audio.wav"
+        sayAudio("Voice changed to Evelyn")
+
 
 commands = {
     "open": openApp,
@@ -245,12 +378,15 @@ commands = {
     "restart": partial(off, 2),    # Defer the `off` call with `type=2`
     "sleep": partial(off, 3),      # Defer the `off` call with `type=3`
     "close": closeApp,
+    "clock": get_time,
+    "set timer": timer,
+    "change voice": change_voice
 }
 
 def parseWords(m_input):
     doc = nlp(m_input)
     nouns = []   
-    fillers = [] 
+    custom = ["ai", "youtube"]
     named_entities = {ent.text for ent in doc.ents}
     custom_entities = {"Microsoft Edge", "Steelseries GG", "File Explorer"}
     named_entities.update(custom_entities)
@@ -258,19 +394,24 @@ def parseWords(m_input):
     for token in doc:
         if token.text in named_entities:
             nouns.append(token.text)
-        elif token.pos_ == "PROPN" or token.text.lower() in {"ai"} or token.pos_ == "NOUN":
+        elif token.pos_ == "PROPN" or token.text.lower() in custom or token.pos_ == "NOUN":
             nouns.append(token.text)
-        elif token.is_stop or token.is_punct:
-            fillers.append(token.text)
-    return nouns, fillers
+    return nouns
 
 def processCommand(m_input):
     for command, action in commands.items():
-        if m_input == command:
+        print(command.lower() + " : " + m_input.strip().lower())
+        if command.lower() == m_input.strip().lower():
             if inspect.signature(action).parameters:
+                nouns = parseWords(m_input)
                 return action(nouns if nouns else None)
-    nouns, fillers = parseWords(m_input)
-    for token in nouns + fillers:
+            else:
+                return action()
+    nouns = parseWords(m_input)
+    for command, action in commands.items():
+                if command in nouns:
+                    nouns.remove(command)
+    for token in nouns:
         m_input = m_input.replace(token, '')
     print(m_input)
     embeddingUser = model.encode(m_input)
@@ -279,7 +420,7 @@ def processCommand(m_input):
         similarity = model.similarity(embeddingUser, embeddingCommand)
         print(similarity)
         if similarity > 0.6:
-            print(nouns)            
+            print(nouns)
             # If the function takes parameters (i.e., num_params > 0), pass nouns; otherwise, call it without any parameter
             if inspect.signature(action).parameters:
                 return action(nouns if nouns else None)
@@ -297,18 +438,16 @@ while True:
         continue
     else:
         text=text.lower()
-    if "styne" in text or "stine" in text or "stein" in text or "steine" in text:
+    if "astro" in text:
         print("active")
-        if text == "stein" or text=="styne" or text=="stine" or text == "steine":
+        if text == "astro":
             print("not")
             text = recognize()
             print(text)
 
         else:
             print("found")
-            text = text.replace("stine", '')
-            text = text.replace("stein", '')
-            text = text.replace("styne", '')
+            text = text.replace("astro ", "")
 
         if not text:  # Check if recognize() returned None
             print("Sorry, I did not understand. Please try again.")
