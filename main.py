@@ -54,7 +54,8 @@ nlp = spacy.load("en_core_web_sm")
 audio = "audio.wav"
 online = False
 load_dotenv()
-
+inactivity_event = threading.Event()
+running = False
 
 #tkinter setup
 def adjust_question_frame_size(event=None):
@@ -84,7 +85,7 @@ app.attributes('-alpha', 0.9)
 
 app.geometry("+1290+10")
 app.maxsize(width=500, height=200)
-#app.overrideredirect(True) 
+app.overrideredirect(True) 
 
 frame = CTkFrame(master=app, width=500, height=150)
 frame.pack(fill="both", expand=True)
@@ -93,24 +94,33 @@ frame.pack(fill="both", expand=True)
 question_frame = CTkScrollableFrame(frame, width=480, height=55, fg_color="transparent")
 question_frame.place(x=10, y=10)
 question_frame._scrollbar.configure(height=0)
-question_label = CTkLabel(master=question_frame, text="", font=Montserrat_line, text_color="#FFFFFF")
+question_label = CTkLabel(master=question_frame, text="", font=Montserrat_line, text_color="#FFFFFF", wraplength=470)
 question_label.pack(pady=5, padx=5, anchor="nw")
 
 # Scrollable frame for the Response section
 response_frame = CTkScrollableFrame(master=frame, width=480, height=55, fg_color="transparent")
 response_frame.place(x=10, y=75)  # Top padding of 10px + question_frame height (55) + 10px gap
 response_frame._scrollbar.configure(height=0)
-response_label = CTkLabel(master=response_frame, text="" * 1, font=Montserrat, text_color="#FFFFFF")
+response_label = CTkLabel(master=response_frame, text="" * 1, font=Montserrat, text_color="#FFFFFF", wraplength=470)
 response_label.pack(pady=5, padx=5, anchor="nw")
 
 # Adjust the question and response frame size dynamically
 question_label.bind("<Configure>", adjust_question_frame_size)
 response_label.bind("<Configure>", adjust_response_frame_size)
 
+def bring_to_top():
+    app.attributes("-topmost", True)  # Make the window topmost
+    app.deiconify()
+    app.lift()  # Bring the window to the front
+
 def response(text):
+    global running
     print(text)
     response_label.configure(text=text)
     sayAudio(text)
+    running = False
+    threading.Thread(target=window_closer, daemon=True, name="Update Label").start()
+
 
 def sayAudio(text):
     wav = tts.tts(text, speaker_wav=audio, language="en")
@@ -154,12 +164,12 @@ def recognize(type=2):
         print(f"Could not request results: {e}")
 
 def askAI():
-    print("Asking AI, online status: " + str(online))
-    response("What would you like to ask AI? Say Take a picture if you would like to take a picture.")
+    response("Asking AI, online status: " + str(online))
     text = recognize()  # Recognize initial command/text
 
     if online:
         if "take a picture" in text.lower():
+            response("Press space to take a picture")
             cv2.namedWindow("Take a picture")
             taking = True
             while taking:
@@ -233,8 +243,7 @@ def askAI():
         for part in generate('llama3', text, stream=True):
             print(part['response'], end='', flush=True)
             fullresponse += part["response"]
-        response(fullresponse)
-            
+        response(fullresponse)         
 def openApp(apps):
     for app in apps:
         try:
@@ -252,26 +261,40 @@ def closeApp(apps):
             print(e)
 
 def showImage(image):
+    global running
     url = f"https://pixabay.com/api/?key={api_key}&q={image}&image_type=photo&pretty=true&per_page=5"
     response = requests.get(url)
     json_data = response.json()
+    running = True
+    threading.Thread(target=window_closer, daemon=True, name="Update Label").start()
     try:
         for image in json_data['hits']:
             i = image['largeImageURL']
             webbrowser.open(i)
+            running = False
     except:
         print("error")
+        running = False
 
 def browse(url):
+    global running
+    running = True
+    threading.Thread(target=window_closer, daemon=True, name="Update Label").start()
     try:
         for link in url:
             webbrowser.open(f"www.{link}.com")
+        running = False
     except Exception as e:
         print(e)
+        running = False
 
 def search(query):
+    global running
+    running = True
+    threading.Thread(target=window_closer, daemon=True, name="Update Label").start()
     term = ', '.join(query)
     webbrowser.open(f"http://google.com/search?q={term}")
+    running=False
 
 def off(action_type):
     if action_type == 1:
@@ -294,7 +317,7 @@ def off(action_type):
 
 def get_time():
     current_time = datetime.now()
-    formatted_time = current_time.strftime("%H:%M")
+    formatted_time = current_time.strftime("%I:%M %p")
     response("The time is " + str(formatted_time))
 
 def timer():
@@ -326,7 +349,6 @@ def change_voice():
 commands = {
     "open": openApp,
     "ask": askAI,
-    "exit": exit,
     "show": showImage,
     "go to": browse,
     "search": search,
@@ -355,47 +377,49 @@ def parseWords(m_input):
     return nouns
 
 def processCommand(m_input):
+    # First check for exact matches
     for command, action in commands.items():
-        print(command.lower() + " : " + m_input.strip().lower())
         if command.lower() == m_input.strip().lower():
             if inspect.signature(action).parameters:
                 nouns = parseWords(m_input)
-                return action(nouns if nouns else None)
+                action(nouns if nouns else None)
             else:
-                return action()
+                action()  # Execute action
+            return  # Command is executed, exit function
+
+    # Fallback to semantic similarity if no exact match
     nouns = parseWords(m_input)
     for command, action in commands.items():
-                if command in nouns:
-                    nouns.remove(command)
+        if command in nouns:
+            nouns.remove(command)
     for token in nouns:
         m_input = m_input.replace(token, '')
-    print(m_input)
     embeddingUser = model.encode(m_input)
     for command, action in commands.items():
         embeddingCommand = model.encode(command)
         similarity = model.similarity(embeddingUser, embeddingCommand)
-        print(similarity)
-        if similarity > 0.6:
-            print(nouns)
-            # If the function takes parameters (i.e., num_params > 0), pass nouns; otherwise, call it without any parameter
+        if similarity > 0.6:  # If similar, execute
             if inspect.signature(action).parameters:
-                return action(nouns if nouns else None)
+                action(nouns if nouns else None)
             else:
-                return action()  # No parameters needed
-    return None
+                action()  # Execute action
+            return  # Command executed, exit function
+    
+    response("Sorry, no matching command found")  # Only print if no match found
 
 def update_label():
+    global running
+    global online
     while True:
-        global online
         online = is_connected()
         text = recognize(1)
         print(text)
         if text == None:
             continue
         else:
-            app.deiconify()
             text=text.lower()
         if "astro" in text:
+            bring_to_top()
             print("active")
             if text == "astro":
                 print("not")
@@ -413,19 +437,36 @@ def update_label():
                 continue  # Skip this iteration of the loop
 
             if text.lower() == "exit":
-                print("Exiting program")
-                break
-
+                question_label.configure(text=text)
+                response("Are you sure you want to exit Astro?")
+                text = recognize()
+                if text.lower() == "yes":
+                    response("Exiting program")
+                    break
+            running = True
             action = processCommand(text)
             if action:
                 action()
-            else:
-                print("Sorry, no matching command found.")
-def start_background_thread():
-    background_thread = threading.Thread(target=update_label, daemon=True)
-    background_thread.start()
+
+def window_closer():
+    global running
+    while running:
+        time.sleep(0.1)
+    for x in range(5):
+        if not running:
+            print(x)
+            time.sleep(1)
+        else:
+            threading.Thread(target=window_closer, daemon=True)
+            break
+    print("closing >5")
+    app.withdraw()
+
+def start_background_threads():
+       # Start the main update_label thread
+    threading.Thread(target=update_label, daemon=True, name="Update Label").start()
 
 # Start the background thread before calling app.mainloop()
-start_background_thread()
+start_background_threads()
 print("running")
 app.mainloop()  # Start the Tkinter main loop
