@@ -19,16 +19,14 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 import threading
-from googletrans import Translator
-
+from customtkinter import *
+import warnings
+import re
 
 # Suppress the specific warning
-#warnings.filterwarnings("ignore", category=UserWarning, message=".*torch.load.*")
-
-load_dotenv()
+warnings.filterwarnings("ignore", category=UserWarning, message=".*torch.load.*")
 
 #cv2 setup
-
 cam = cv2.VideoCapture(0)
 
 #TTS setup
@@ -39,16 +37,6 @@ tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 client = Groq(
     api_key=os.getenv("GROQ"),
 )
-
-audio = "audio.wav"
-
-def sayAudio(text):
-    wav = tts.tts(text, speaker_wav=audio, language="en")
-    sd.play(wav, samplerate=23500)
-    sd.wait()
-
-def stream_callback(token):
-    print(token, end='', flush=True)
 
 #Pixabay API key   
 api_key = os.getenv("PIXABAY")
@@ -62,100 +50,75 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 #spacy model
 nlp = spacy.load("en_core_web_sm")
 
-#languages
-language_map = {
-    'Afrikaans': 'af',
-    'Albanian': 'sq',
-    'Amharic': 'am',
-    'Arabic': 'ar',
-    'Armenian': 'hy',
-    'Basque': 'eu',
-    'Belarusian': 'be',
-    'Bengali': 'bn',
-    'Bosnian': 'bs',
-    'Bulgarian': 'bg',
-    'Catalan': 'ca',
-    'Cebuano': 'ceb',
-    'Chinese (Simplified)': 'zh-cn',
-    'Chinese (Traditional)': 'zh-tw',
-    'Croatian': 'hr',
-    'Czech': 'cs',
-    'Danish': 'da',
-    'Dutch': 'nl',
-    'English': 'en',
-    'Esperanto': 'eo',
-    'Estonian': 'et',
-    'Filipino': 'tl',
-    'Finnish': 'fi',
-    'French': 'fr',
-    'Galician': 'gl',
-    'Georgian': 'ka',
-    'German': 'de',
-    'Greek': 'el',
-    'Gujarati': 'gu',
-    'Haitian Creole': 'ht',
-    'Hebrew': 'he',
-    'Hindi': 'hi',
-    'Hmong': 'hmn',
-    'Hungarian': 'hu',
-    'Icelandic': 'is',
-    'Igbo': 'ig',
-    'Indonesian': 'id',
-    'Irish': 'ga',
-    'Italian': 'it',
-    'Japanese': 'ja',
-    'Javanese': 'jw',
-    'Kannada': 'kn',
-    'Kazakh': 'kk',
-    'Khmer': 'km',
-    'Korean': 'ko',
-    'Kurdish (Kurmanji)': 'ku',
-    'Kyrgyz': 'ky',
-    'Lao': 'lo',
-    'Latvian': 'lv',
-    'Lithuanian': 'lt',
-    'Macedonian': 'mk',
-    'Malay': 'ms',
-    'Malayalam': 'ml',
-    'Maltese': 'mt',
-    'Maori': 'mi',
-    'Marathi': 'mr',
-    'Mongolian': 'mn',
-    'Myanmar (Burmese)': 'my',
-    'Nepali': 'ne',
-    'Norwegian': 'no',
-    'Pashto': 'ps',
-    'Persian': 'fa',
-    'Polish': 'pl',
-    'Portuguese': 'pt',
-    'Punjabi': 'pa',
-    'Romanian': 'ro',
-    'Russian': 'ru',
-    'Serbian': 'sr',
-    'Sesotho': 'st',
-    'Sinhala': 'si',
-    'Slovak': 'sk',
-    'Slovenian': 'sl',
-    'Somali': 'so',
-    'Spanish': 'es',
-    'Sundanese': 'su',
-    'Swahili': 'sw',
-    'Swedish': 'sv',
-    'Tagalog': 'tl',
-    'Tamil': 'ta',
-    'Telugu': 'te',
-    'Thai': 'th',
-    'Turkish': 'tr',
-    'Ukrainian': 'uk',
-    'Urdu': 'ur',
-    'Uzbek': 'uz',
-    'Vietnamese': 'vi',
-    'Welsh': 'cy',
-    'Xhosa': 'xh',
-    'Yiddish': 'yi',
-    'Yoruba': 'yo',
-    'Zulu': 'zu'
-}
+#other
+audio = "audio.wav"
+online = False
+load_dotenv()
+
+
+#tkinter setup
+def adjust_question_frame_size(event=None):
+    # Adjust the height of the question frame based on the content
+    content_height = question_label.winfo_height()
+    max_height = 55  # Maximum height for the question frame
+    new_height = min(content_height, max_height)  # Don't exceed max height
+    question_frame.configure(height=new_height)
+
+def adjust_response_frame_size(event=None):
+    # Adjust the height of the response frame based on the content
+    content_height = response_label.winfo_height()
+    max_height = 150  # Maximum height for the response frame
+    min_height = 55   # Minimum height for the response frame
+    new_height = min(max(content_height, min_height), max_height)  # Adjust between min and max height
+    response_frame.configure(height=new_height)
+
+    # Also adjust the main frame height to fit the new content, without extra space at the bottom
+    total_height = 55 + question_frame.winfo_height() + new_height  # 55px for question frame
+    app.geometry(f"500x{total_height}")  # Adjust the window height dynamically
+
+app = CTk()
+Montserrat = CTkFont(family="Montserrat", size=12, weight="bold")
+Montserrat_line = CTkFont(family="Montserrat", size=12, weight="bold", underline=True)
+
+app.attributes('-alpha', 0.9)
+
+app.geometry("+1290+10")
+app.maxsize(width=500, height=200)
+#app.overrideredirect(True) 
+
+frame = CTkFrame(master=app, width=500, height=150)
+frame.pack(fill="both", expand=True)
+
+# Scrollable frame for the Question section
+question_frame = CTkScrollableFrame(frame, width=480, height=55, fg_color="transparent")
+question_frame.place(x=10, y=10)
+question_frame._scrollbar.configure(height=0)
+question_label = CTkLabel(master=question_frame, text="", font=Montserrat_line, text_color="#FFFFFF")
+question_label.pack(pady=5, padx=5, anchor="nw")
+
+# Scrollable frame for the Response section
+response_frame = CTkScrollableFrame(master=frame, width=480, height=55, fg_color="transparent")
+response_frame.place(x=10, y=75)  # Top padding of 10px + question_frame height (55) + 10px gap
+response_frame._scrollbar.configure(height=0)
+response_label = CTkLabel(master=response_frame, text="" * 1, font=Montserrat, text_color="#FFFFFF")
+response_label.pack(pady=5, padx=5, anchor="nw")
+
+# Adjust the question and response frame size dynamically
+question_label.bind("<Configure>", adjust_question_frame_size)
+response_label.bind("<Configure>", adjust_response_frame_size)
+
+def response(text):
+    print(text)
+    response_label.configure(text=text)
+    sayAudio(text)
+
+def sayAudio(text):
+    wav = tts.tts(text, speaker_wav=audio, language="en")
+    sd.play(wav, samplerate=23500)
+    sd.wait()
+
+def stream_callback(token):
+    print(token, end='', flush=True)
 
 def is_connected():
     try:
@@ -192,6 +155,7 @@ def recognize(type=2):
 
 def askAI():
     print("Asking AI, online status: " + str(online))
+    response("What would you like to ask AI? Say Take a picture if you would like to take a picture.")
     text = recognize()  # Recognize initial command/text
 
     if online:
@@ -214,7 +178,7 @@ def askAI():
             cv2.destroyAllWindows()
 
             if result:
-                print("What do you want to say?")
+                response("What do you want to say?")
                 query = recognize()  # Recognize additional query after taking a picture
 
                 # Encode the image as PNG and convert to base64
@@ -249,8 +213,7 @@ def askAI():
                     stop=None,
                 )
 
-                print(completion.choices[0].message.content)
-                sayAudio(completion.choices[0].message.content)
+                response(completion.choices[0].message.content)
 
         else:
             # If no picture-taking command, proceed with regular chat completion
@@ -263,20 +226,19 @@ def askAI():
                 ],
                 model="llama3-8b-8192",
             )
-            print(chat_completion.choices[0].message.content)
-            sayAudio(chat_completion.choices[0].message.content)
+            response(chat_completion.choices[0].message.content)
     else:
         fullresponse = ""
-        sayAudio("You are offline, using locally available Llama 3.2. Responses may be delayed")
+        response("You are offline, using locally available Llama 3.2. Responses may be delayed")
         for part in generate('llama3', text, stream=True):
             print(part['response'], end='', flush=True)
             fullresponse += part["response"]
-        sayAudio(fullresponse)
+        response(fullresponse)
             
 def openApp(apps):
     for app in apps:
         try:
-            sayAudio("Opening " + app)
+            response("Opening " + app)
             open(app, match_closest=True)
         except Exception as e:
             print(e)
@@ -284,7 +246,7 @@ def openApp(apps):
 def closeApp(apps):
     for app in apps:
         try:
-            sayAudio("Closing " + app)
+            response("Closing " + app)
             close(app, match_closest=True)
         except Exception as e:
             print(e)
@@ -313,23 +275,19 @@ def search(query):
 
 def off(action_type):
     if action_type == 1:
-        print("Are you sure you want to shut down?")   
-        sayAudio("Are you sure you want to shut down?")        
+        response("Are you sure you want to shut down?")        
         text = recognize()
         if "yes" in text:
             os.system('shutdown -s -t 0')
         elif "no" in text:
-            print("Shut down cancelled")
-            sayAudio("Shut down cancelled")
+            response("Shut down cancelled")
     elif action_type == 2:
-        print("Are you sure you want to restart?")
-        sayAudio("Are you sure you want to restart?")        
+        response("Are you sure you want to restart?")        
         text = recognize()
         if "yes" in text:
             os.system('shutdown -r -t 0')
         elif "no" in text:
-            print("Restart cancelled")
-            sayAudio("Restart cancelled")
+            response("Restart cancelled")
 
     elif action_type == 3:
         os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
@@ -337,13 +295,11 @@ def off(action_type):
 def get_time():
     current_time = datetime.now()
     formatted_time = current_time.strftime("%H:%M")
-    print("Current Time:", formatted_time)
-    sayAudio("The time is " + str(formatted_time))
+    response("The time is " + str(formatted_time))
 
 def timer():
-    print("How many minutes would you like a timer for?")
-    sayAudio("How many minutes would you like a timer for?")
-    minutes = recognize()
+    response("How many minutes would you like a timer for?")
+    minutes = int(re.search(r'\d+', recognize()).group())
     seconds = minutes*60
     timer = 0
     while timer < seconds:
@@ -360,11 +316,11 @@ def change_voice():
     global audio
     if audio == "audio.wav":
         audio = "audio2.wav" 
-        sayAudio("Voice changed to Andrew")
+        response("Voice changed to Andrew")
 
     else:
         audio = "audio.wav"
-        sayAudio("Voice changed to Evelyn")
+        response("Voice changed to Evelyn")
 
 
 commands = {
@@ -428,38 +384,48 @@ def processCommand(m_input):
                 return action()  # No parameters needed
     return None
 
+def update_label():
+    while True:
+        global online
+        online = is_connected()
+        text = recognize(1)
+        print(text)
+        if text == None:
+            continue
+        else:
+            app.deiconify()
+            text=text.lower()
+        if "astro" in text:
+            print("active")
+            if text == "astro":
+                print("not")
+                text = recognize()
+                question_label.configure(text=text)
+                print(text)
+            else:
+                question_label.configure(text=text)
+
+                print("found")
+                text = text.replace("astro ", "")
+
+            if not text:  # Check if recognize() returned None
+                print("Sorry, I did not understand. Please try again.")
+                continue  # Skip this iteration of the loop
+
+            if text.lower() == "exit":
+                print("Exiting program")
+                break
+
+            action = processCommand(text)
+            if action:
+                action()
+            else:
+                print("Sorry, no matching command found.")
+def start_background_thread():
+    background_thread = threading.Thread(target=update_label, daemon=True)
+    background_thread.start()
+
+# Start the background thread before calling app.mainloop()
+start_background_thread()
 print("running")
-
-while True:
-    online = is_connected()
-    text = recognize(1)
-    print(text)
-    if text == None:
-        continue
-    else:
-        text=text.lower()
-    if "astro" in text:
-        print("active")
-        if text == "astro":
-            print("not")
-            text = recognize()
-            print(text)
-
-        else:
-            print("found")
-            text = text.replace("astro ", "")
-
-        if not text:  # Check if recognize() returned None
-            print("Sorry, I did not understand. Please try again.")
-            continue  # Skip this iteration of the loop
-
-        if text.lower() == "exit":
-            print("Exiting program")
-            break
-
-        action = processCommand(text)
-        if action:
-            action()
-        else:
-            print("Sorry, no matching command found.")
-
+app.mainloop()  # Start the Tkinter main loop
