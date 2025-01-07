@@ -22,6 +22,8 @@ import threading
 from customtkinter import *
 import warnings
 import re
+from PIL import Image, ImageTk
+import io
 
 # Suppress the specific warning
 warnings.filterwarnings("ignore", category=UserWarning, message=".*torch.load.*")
@@ -58,6 +60,7 @@ inactivity_event = threading.Event()
 running = False
 
 #tkinter setup
+#tkinter setup
 def adjust_question_frame_size(event=None):
     # Adjust the height of the question frame based on the content
     content_height = question_label.winfo_height()
@@ -78,13 +81,14 @@ def adjust_response_frame_size(event=None):
     app.geometry(f"500x{total_height}")  # Adjust the window height dynamically
 
 app = CTk()
-Montserrat = CTkFont(family="Montserrat", size=12, weight="bold")
-Montserrat_line = CTkFont(family="Montserrat", size=12, weight="bold", underline=True)
+Montserrat = CTkFont(family="Montserrat", size=13, weight="bold")
+Montserrat_line = CTkFont(family="Montserrat", size=16, weight="bold", underline=True)
 
 app.attributes('-alpha', 0.9)
 
-app.geometry("+1290+10")
-app.maxsize(width=500, height=200)
+
+app.geometry("+1290+50")
+app.maxsize(width=500, height=800)
 app.overrideredirect(True) 
 
 frame = CTkFrame(master=app, width=500, height=150)
@@ -95,7 +99,8 @@ question_frame = CTkScrollableFrame(frame, width=480, height=55, fg_color="trans
 question_frame.place(x=10, y=10)
 question_frame._scrollbar.configure(height=0)
 question_label = CTkLabel(master=question_frame, text="", font=Montserrat_line, text_color="#FFFFFF", wraplength=470)
-question_label.pack(pady=5, padx=5, anchor="nw")
+question_label.pack(pady=5, padx=5, anchor="n")
+
 
 # Scrollable frame for the Response section
 response_frame = CTkScrollableFrame(master=frame, width=480, height=55, fg_color="transparent")
@@ -108,19 +113,22 @@ response_label.pack(pady=5, padx=5, anchor="nw")
 question_label.bind("<Configure>", adjust_question_frame_size)
 response_label.bind("<Configure>", adjust_response_frame_size)
 
+
 def bring_to_top():
+    global running
+    running = True
     app.attributes("-topmost", True)  # Make the window topmost
     app.deiconify()
     app.lift()  # Bring the window to the front
 
-def response(text):
+def response(text, type=False):
     global running
     print(text)
     response_label.configure(text=text)
     sayAudio(text)
-    running = False
+    running = type
+    print(running)
     threading.Thread(target=window_closer, daemon=True, name="Update Label").start()
-
 
 def sayAudio(text):
     wav = tts.tts(text, speaker_wav=audio, language="en")
@@ -138,39 +146,40 @@ def is_connected():
     except requests.ConnectionError:
         return False
 
-def recognize(type=2):
-    #return input("response:")
+def recognize(audiot=2):
     try:
         with sr.Microphone() as mic:
             r.adjust_for_ambient_noise(mic, duration=0.2)
-            if type == 1:
+            if audiot == 1:
                 r.pause_threshold = 0.6
-            if type == 2:
+            if audiot == 2:
                 r.pause_threshold = 1
             audio = r.listen(mic)
             if online:
                 text = r.recognize_google(audio)
-                while text == None:
+                while text == None or "":
                     text = r.recognize_google(audio)
                 return text
             else:
                 text = r.recognize_whisper(audio)
-                while text == None:
+                while text == None or "":
                     text = r.recognize_whisper(audio)
                 return text
     except sr.UnknownValueError:
-        print("Could not understand audio")
+        recognize(audiot=audiot)
     except sr.RequestError as e:
         print(f"Could not request results: {e}")
 
 def askAI():
-    response("Asking AI, online status: " + str(online))
-    text = recognize()  # Recognize initial command/text
-
+    global running
+    running = True
     if online:
+        response("What would you like to ask AI? If online, you can take a picture.", True)
+        text = recognize()
         if "take a picture" in text.lower():
-            response("Press space to take a picture")
             cv2.namedWindow("Take a picture")
+            cv2.setWindowProperty("Take a picture", cv2.WND_PROP_TOPMOST, 1)
+            response("Press space to take a picture", True)
             taking = True
             while taking:
                 result, image = cam.read()  # Capture an image
@@ -188,7 +197,7 @@ def askAI():
             cv2.destroyAllWindows()
 
             if result:
-                response("What do you want to say?")
+                response("What do you want to say?", True)
                 query = recognize()  # Recognize additional query after taking a picture
 
                 # Encode the image as PNG and convert to base64
@@ -216,16 +225,18 @@ def askAI():
                             ]
                         }
                     ],
-                    temperature=2,
+                    temperature=1,
                     max_tokens=1024,
                     top_p=1,
                     stream=False,
                     stop=None,
                 )
 
-                response(completion.choices[0].message.content)
-
+                response_label.configure(text=completion.choices[0].message.content)
+                running = False
+                
         else:
+            response("What would you like to ask AI?", True)
             # If no picture-taking command, proceed with regular chat completion
             chat_completion = client.chat.completions.create(
                 messages=[
@@ -236,14 +247,20 @@ def askAI():
                 ],
                 model="llama3-8b-8192",
             )
-            response(chat_completion.choices[0].message.content)
+            response_label.configure(text=chat_completion.choices[0].message.content)
+            running = False
     else:
         fullresponse = ""
-        response("You are offline, using locally available Llama 3.2. Responses may be delayed")
+        response("You are offline, using locally available Llama 3.2. Responses may be delayed", True)
+        time.sleep(1)
+        response("What do you want to ask AI?", True)
+        text = recognize()
         for part in generate('llama3', text, stream=True):
             print(part['response'], end='', flush=True)
             fullresponse += part["response"]
-        response(fullresponse)         
+        response_label.configure(text=fullresponse) 
+        running = False
+
 def openApp(apps):
     for app in apps:
         try:
@@ -275,7 +292,6 @@ def showImage(image):
     except:
         print("error")
         running = False
-
 def browse(url):
     global running
     running = True
@@ -321,19 +337,20 @@ def get_time():
     response("The time is " + str(formatted_time))
 
 def timer():
+
     response("How many minutes would you like a timer for?")
     minutes = int(re.search(r'\d+', recognize()).group())
     seconds = minutes*60
+    threading.Thread(target=start_timer, args=(seconds,)).start()
+    
+
+def start_timer(seconds):
     timer = 0
     while timer < seconds:
         timer+=1
         time.sleep(1)
     print("Your timer is done")
     sayAudio("Your timer is done")
-
-def start_timer(time_in_minutes):
-    timer_thread = threading.Thread(target=timer, args=(time_in_minutes,))
-    timer_thread.start()
 
 def change_voice():
     global audio
@@ -345,6 +362,21 @@ def change_voice():
         audio = "audio.wav"
         response("Voice changed to Evelyn")
 
+def take_note():
+    global running
+    response("What would you like to note down?", True)
+    note = recognize()
+    f = open("notes.txt", "a")
+    f.write(note+"\n")
+    f.close()
+    running = False
+
+def show_notes():
+    global running
+    running = True
+    f = open("notes.txt", "r")
+    response_label.configure(text=f.read())
+    running = False
 
 commands = {
     "open": openApp,
@@ -358,7 +390,9 @@ commands = {
     "close": closeApp,
     "clock": get_time,
     "set timer": timer,
-    "change voice": change_voice
+    "change voice": change_voice,
+    "jot": take_note,
+    "notes": show_notes,
 }
 
 def parseWords(m_input):
@@ -448,6 +482,8 @@ def update_label():
             if action:
                 action()
 
+
+
 def window_closer():
     global running
     while running:
@@ -457,7 +493,6 @@ def window_closer():
             print(x)
             time.sleep(1)
         else:
-            threading.Thread(target=window_closer, daemon=True)
             break
     print("closing >5")
     app.withdraw()
