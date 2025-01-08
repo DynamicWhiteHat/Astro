@@ -33,5 +33,4 @@
 .exe file coming soon. For now, clone the repo onto your device, create your own API keys for GROQ and Pixabay (both free) and fill them in for the variables, then run main.py.
 
 #### #Initially called Styne (after Einstein), the name was changed to Astro after speech recognition difficulties.
-
 <br>
