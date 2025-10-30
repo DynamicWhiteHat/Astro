@@ -1,7 +1,6 @@
 import joblib
 import inspect
 from core.commandsRegistry import userCommands
-
 # Load the model
 model = joblib.load('v2/models/intent_classifier.joblib')
 

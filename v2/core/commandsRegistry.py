@@ -8,6 +8,7 @@ from commands.wikipedia import return_summary
 from commands.note import addNote, retrieveToday
 from commands.volume import set_volume, volume_up, volume_down, mute, unmute
 from commands.ai import askAI
+from commands.app import processApp
 import requests
 current_datetime = datetime.now()
 
@@ -39,4 +40,5 @@ userCommands = {
     "AI": lambda command, ui: askAI(command, ui) if is_connected() else speaker.yap("Sorry, you need an internet connection to access this feature."),
     "Note": lambda command: addNote(command),
     "ReadNote": lambda: retrieveToday(),
+    "App": lambda command: processApp(command),  # Placeholder for App commands
     }
