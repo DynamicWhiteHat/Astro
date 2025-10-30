@@ -3,7 +3,8 @@ import math
 from PySide6.QtCore import Qt, QRect, Signal, QPropertyAnimation, QEasingCurve, QTimer
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtGui import QColor, QPainter
-from gui.textOverlay import TextOverlay
+from ui.textOverlay import TextOverlay
+from core.voice import speaker
 
 class AssistantWindow(QMainWindow):
     # Signals
@@ -36,7 +37,7 @@ class AssistantWindow(QMainWindow):
 
         # Connections
         self.showSignal.connect(self.fadeIn)
-        self.hideSignal.connect(self.fadeOut)
+        self.hideSignal.connect(self.onHide)
         self.startPulseSignal.connect(self.startPulse)
         self.stopPulseSignal.connect(self.stopPulse)
 
@@ -74,6 +75,9 @@ class AssistantWindow(QMainWindow):
         self.showUserTextSignal.connect(lambda text: self.showUserText(text))
         self.showResponseTextSignal.connect(lambda text: self.showResponseText(text))
 
+    def onHide(self):
+        speaker.stop()   
+        self.fadeOut() 
     # --- Pulse bar ---
     def startPulse(self):
         if not self.pulsing:

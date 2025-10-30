@@ -8,6 +8,8 @@ from commands.wikipedia import return_summary
 from commands.note import addNote, retrieveToday
 from commands.volume import set_volume, volume_up, volume_down, mute, unmute
 from commands.ai import askAI
+from commands.timer import start_timer
+from commands.app import processApp
 import requests
 current_datetime = datetime.now()
 
@@ -27,7 +29,10 @@ userCommands = {
     "Weather": lambda ui: get_weather(get_location(), ui) if is_connected() else speaker.yap("Sorry, you need an internet connection to access this feature."),
     "Joke": lambda ui: joke(ui),
     "Screen": lambda ui: process_screen(ui) if is_connected() else speaker.yap("Sorry, you need an internet connection to access this feature."),
-    "Time": lambda ui: (ui.showResponseTextSignal.emit(f"The current time is {current_datetime.time().strftime('%I:%M %p')}"), speaker.yap(f"The current time is {current_datetime.time().strftime('%I %M')}")),
+    "Time": lambda ui: (ui.showResponseTextSignal.emit(f"The current time is {current_datetime.time().strftime('%I:%M %p')}"), speaker.yap(
+        f"The current time is {current_datetime.strftime('%I').lstrip('0')} "
+        f"{current_datetime.strftime('%M').lstrip('0')} "
+        f"{'A M' if current_datetime.strftime('%p') == 'AM' else 'P M'}")),
     "Date": lambda ui: (ui.showResponseTextSignal.emit(f"Today's date is {current_datetime.strftime('%B %d, %Y')}"),
                     speaker.yap(f"Today's date is {current_datetime.strftime('%B %d, %Y')}")),
     "Wikipedia": lambda command, ui: return_summary(command, ui) if is_connected() else speaker.yap("Sorry, you need an internet connection to access this feature."),
@@ -39,4 +44,6 @@ userCommands = {
     "AI": lambda command, ui: askAI(command, ui) if is_connected() else speaker.yap("Sorry, you need an internet connection to access this feature."),
     "Note": lambda command: addNote(command),
     "ReadNote": lambda: retrieveToday(),
+    "App": lambda command: processApp(command),
+    "Timer": lambda command: start_timer(command),
     }

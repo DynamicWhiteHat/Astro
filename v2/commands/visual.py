@@ -1,6 +1,6 @@
 from mss import mss
 from core.voice import speaker
-from API_KEY import API_KEY
+from core.API_KEY import API_KEY
 from PIL import Image
 from groq import Groq
 import base64

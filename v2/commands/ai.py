@@ -1,5 +1,5 @@
 from groq import Groq
-from API_KEY import API_KEY
+from core.API_KEY import API_KEY
 from core.voice import speaker
 
 
