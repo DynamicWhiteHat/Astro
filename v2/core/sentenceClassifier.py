@@ -1,11 +1,6 @@
 import joblib
 import inspect
 from core.commandsRegistry import userCommands
-from core.voice import speaker
-import os
-import keyboard
-import threading
-
 
 # Load the model
 model = joblib.load('models/intent_classifier.joblib')
