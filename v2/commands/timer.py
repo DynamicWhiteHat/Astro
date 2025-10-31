@@ -5,7 +5,7 @@ from core.voice import speaker
 from pygame import mixer
 
 mixer.init()
-mixer.music.load('sounds/timer.mp3')
+
 
 # Mapping of text numbers to integers
 TEXT_NUMBERS = {
@@ -73,6 +73,7 @@ def format_timer_message(hours, minutes, seconds):
         return ', '.join(parts[:-1]) + ' and ' + parts[-1]
 
 def start_timer(text):
+    mixer.music.load('sounds/timer.mp3')
     hours, minutes, seconds = parse_time(text)
     duration = total_seconds(hours, minutes, seconds)
     message = format_timer_message(hours, minutes, seconds)

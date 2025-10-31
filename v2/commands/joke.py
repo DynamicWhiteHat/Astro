@@ -3,7 +3,7 @@ import random
 from pygame import mixer
 
 mixer.init()
-mixer.music.load('sounds/joke.mp3')
+
 
 jokes = [
     "I told my wife she was drawing her eyebrows too high. She looked surprised.",
@@ -110,6 +110,7 @@ jokes = [
 
 
 def joke(ui):
+    mixer.music.load('sounds/joke.mp3')
     joke = random.choice(jokes)
     print(joke)
     ui.showResponseTextSignal.emit(joke)
