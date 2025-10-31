@@ -25,6 +25,7 @@
 - "sleep": Sleep
 - "close": Closes an app,
 - "time": Gets the current time,
+- "timer": Sets a timer for *x* hours, *x* minutes, and *x* seconds
 
 ## Usage:
 .exe file coming soon. For now, clone the repo onto your device, create your own API keys for GROQ and Pixabay (both free) and fill them in for the variables, then run main.py.
